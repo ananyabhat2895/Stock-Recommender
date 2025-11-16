@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI-Powered Portfolio Insights</title>
+    <meta name="description" content="Generate personalized stock portfolio recommendations with our AI-driven insights system.">
+    <meta name="keywords" content="React, Tailwind, AI, Gemini, Stock Portfolio, Investment, Fintech">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --color-primary: 217 91% 60%;
+        --color-secondary: 26 95% 56%;
+        --color-accent: 291 88% 65%;
+        --color-background: 220 13% 95%;
+        --color-foreground: 220 9% 10%;
+        --color-card: 220 13% 100%;
+        --font-sans: 'Inter', sans-serif;
+      }
+      .dark {
+        --color-primary: 217 91% 60%;
+        --color-secondary: 26 95% 56%;
+        --color-accent: 291 88% 65%;
+        --color-background: 224 71% 4%;
+        --color-foreground: 210 40% 98%;
+        --color-card: 222 84% 8%;
+      }
+      body {
+        font-family: var(--font-sans);
+        background-color: hsl(var(--color-background));
+        color: hsl(var(--color-foreground));
+      }
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    </style>
+     <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: 'hsl(var(--color-primary))',
+              secondary: 'hsl(var(--color-secondary))',
+              accent: 'hsl(var(--color-accent))',
+              background: 'hsl(var(--color-background))',
+              foreground: 'hsl(var(--color-foreground))',
+              card: 'hsl(var(--color-card))',
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            keyframes: {
+              slideDown: {
+                '0%': { opacity: '0', transform: 'translateY(-10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              }
+            },
+            animation: {
+              slideDown: 'slideDown 0.3s ease-out forwards',
+              fadeIn: 'fadeIn 0.5s ease-in-out forwards',
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
