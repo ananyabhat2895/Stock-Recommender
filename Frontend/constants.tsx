@@ -1,5 +1,5 @@
 import React from 'react';
-import type { MarketCap, RiskTolerance, Asset } from './types';
+import type { MarketCap, RiskTolerance } from './types';
 
 export const AppLogo: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg {...props} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -62,7 +62,7 @@ export const XIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <line x1="6" y1="6" x2="18" y2="18"></line>
     </svg>
 );
-
+ 
 
 // FIX: Changed JSX.Element to React.ReactNode to resolve "Cannot find namespace 'JSX'" error.
 export const MARKET_CAP_OPTIONS: { value: MarketCap; description: string; icon: React.ReactNode }[] = [
@@ -73,4 +73,25 @@ export const MARKET_CAP_OPTIONS: { value: MarketCap; description: string; icon: 
 
 export const RISK_TOLERANCE_OPTIONS: RiskTolerance[] = ['Low', 'Medium', 'High'];
 
-export const ASSET_PREFERENCES: Asset[] = ['Equity', 'Mutual Funds', 'ETFs'];
+export const ASSET_PREFERENCES: Asset[] = [
+  'ENERGY',
+  'Basic Materials',
+  'Consumer Defensive',
+  'Consumer Cyclical',
+  'UNKNOWN',
+  'Utilities',
+  'Financial Services',
+  'Healthcare',
+  'Industrials',
+  'Real Estate',
+  'Communication Services',
+  'BANKING',
+  'PHARMA',
+  'IT',
+  'REALTY',
+  'Technology',
+  'AUTO',
+  'METALS',
+  'FMCG'
+];
+

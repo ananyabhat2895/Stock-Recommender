@@ -1,22 +1,36 @@
 // Frontend/services/mlService.ts
-import axios from 'axios';
+import axios from "axios";
 
 export type MLRequest = {
-  marketCap?: string;
-  riskTolerance?: string;
-  timeHorizonMonths?: number;
+  initialNetAmount: number;
+  timeHorizon: number;
+  marketCap: string;
+  riskTolerance: string;
+  assetPreferences: string[];
   topN?: number;
 };
 
+
 export type MLResponse = {
-  top: { symbol: string; score: number }[];
-  count: number;
+  top: { 
+    symbol: string; 
+    final_amount: number;
+    profit: number;
+  }[];
+  recommendedStocks: any[];
 };
 
-const backendUrl = process.env.REACT_APP_BACKEND_URL || ''; // if empty, relative path used
+
+
+const backendUrl = "http://localhost:5000";
 
 export async function getMLRecommendations(payload: MLRequest): Promise<MLResponse> {
-  const url = backendUrl ? `${backendUrl}/api/ml-recommend` : `/api/ml-recommend`;
-  const resp = await axios.post(url, payload, { timeout: 30000 });
+  const url = backendUrl
+    ? `${backendUrl}/api/ml-recommend`
+    : `/api/ml-recommend`;
+
+  console.log("Sending payload:", payload);
+
+  const resp = await axios.post(url, payload, { timeout: 0 });
   return resp.data;
 }

@@ -1,7 +1,7 @@
 
 export type MarketCap = 'Small Cap' | 'Mid Cap' | 'Large Cap';
 export type RiskTolerance = 'Low' | 'Medium' | 'High';
-export type Asset = 'Equity' | 'Mutual Funds' | 'ETFs';
+// export type Asset = 'Equity' | 'Mutual Funds' | 'ETFs';
 export type TimeHorizonUnit = 'Months' | 'Years' | 'Specific Date';
 
 export interface FormData {
@@ -11,7 +11,7 @@ export interface FormData {
   specificDate: string;
   marketCap: MarketCap;
   riskTolerance: RiskTolerance;
-  assets: Asset[];
+  // assets: Asset[];
 }
 
 export interface PortfolioDistribution {

@@ -302,6 +302,10 @@ def get_top_predicted_stocks(
 # =====================================================
 
 def example_run():
+    """
+    Full training + evaluation + backtest + saving model.
+    This is meant for offline experimentation / model training.
+    """
 
     MONGO_URI = "mongodb://localhost:27017"
     DB = "stockDB"
@@ -337,7 +341,7 @@ def example_run():
     # 5.1 Select companies based on sector + cap filters
     # --------------------------------------------------
     # Adjust these as needed
-    allowed_sectors = ["Basic Materials"]
+    allowed_sectors = ["Healthcare"]
     allowed_caps = ["LARGE_CAP"]
 
     filtered_df = load_and_filter_nse_list(
@@ -627,9 +631,244 @@ def example_run():
     plot_backtest(actual_vals, predicted_vals)
 
 
+# =====================================================
+# 6. PRODUCTION INFERENCE FUNCTION (used by FastAPI)
+# =====================================================
+
+def run_model(
+    marketCap: str,
+    riskTolerance: str,
+    timeHorizon: int,
+    assetPreferences: List[str],
+    initialNetAmount: float,
+    top_n: int = 10,
+) -> List[Dict]:
+
+    MONGO_URI = "mongodb://localhost:27017"
+    DB = "stockDB"
+    COLL = "precomputed_daily"
+
+    HORIZON = timeHorizon
+
+    # ----------------------------
+    # 1. SECTOR + CAP FILTER
+    # ----------------------------
+    allowed_sectors = assetPreferences if assetPreferences else None
+    allowed_caps = [marketCap] if marketCap else None
+
+    client = get_mongo_client(MONGO_URI)
+
+    # Base indicators
+    base_feature_cols = [
+        "RSI","SMA_20","SMA_50","EMA_12","EMA_26",
+        "MACD","MACD_signal","MACD_hist","Volatility_20",
+        "Return_1d","Return_5d","Return_10d","Return_20d",
+        "Momentum_20","ATR_14","BB_Width","ROC_10",
+        "Stoch_K","Stoch_D","Williams_R","OBV","Volume_Z",
+        "VWAP_Distance",
+    ]
+
+    extra_features = [
+        "Momentum_60","Vol_Change","Pct_From_52W_High",
+        "RSI_smoothed","MACD_smoothed","Volatility_20_smoothed",
+        "Volatility_60_extra","Volume_RollMean_20",
+        "Return_1d_lag1","Return_5d_lag1",
+        "Momentum_20_lag1","RSI_lag1","MACD_lag1",
+        "RSI_rank","Momentum_60_rank","Volatility_20_rank",
+    ]
+
+    # Load NSE list + apply filters
+    filtered_df = load_and_filter_nse_list(
+        csv_path="NSE.csv",
+        allowed_sectors=allowed_sectors,
+        allowed_caps=allowed_caps,
+    )
+
+    if filtered_df.empty:
+        print("run_model: No companies match filters.")
+        return []
+
+    # ----------------------------
+    # 2. LOAD MONGO DATA
+    # ----------------------------
+    dfs = []
+    for _, row in filtered_df.iterrows():
+        ticker = row["symbol"]
+        full_name = row["SYMBOL_NAME"]
+
+        df_sym = fetch_precomputed_for_symbol(client, full_name, DB, COLL)
+        if df_sym.empty:
+            continue
+
+        df_sym["symbol"] = ticker
+        dfs.append(df_sym)
+
+    if not dfs:
+        return []
+
+    full_df = pd.concat(dfs).reset_index(drop=True)
+    full_df = full_df.sort_values(["date","symbol"]).reset_index(drop=True)
+
+    # Cleaning
+    full_df = full_df[full_df["date"] >= pd.Timestamp("2018-01-01")]
+
+    if "volume" in full_df.columns:
+        full_df = full_df[full_df["volume"] > 0]
+
+    full_df = full_df[full_df["close"] > 50].reset_index(drop=True)
+
+    # ----------------------------
+    # 3. FEATURE ENGINEERING
+    # ----------------------------
+    for col in base_feature_cols:
+        if col in full_df.columns:
+            full_df[col] = full_df.groupby("symbol")[col].transform(
+                lambda x: (x - x.mean()) / (x.std() + 1e-6)
+            )
+
+    full_df["Ret_1d_raw"] = full_df.groupby("symbol")["close"].pct_change()
+    full_df["Momentum_60"] = full_df.groupby("symbol")["close"].pct_change(60)
+
+    if "volume" in full_df.columns:
+        full_df["Vol_Change"] = full_df.groupby("symbol")["volume"].pct_change()
+        full_df["Volume_RollMean_20"] = full_df.groupby("symbol")["volume"].transform(
+            lambda x: x.rolling(20, min_periods=10).mean()
+        )
+
+    full_df["High_252"] = full_df.groupby("symbol")["close"].transform(
+        lambda x: x.rolling(252, min_periods=20).max()
+    )
+    full_df["Pct_From_52W_High"] = full_df["close"] / full_df["High_252"] - 1
+
+    full_df["Volatility_60_extra"] = full_df.groupby("symbol")["Ret_1d_raw"].transform(
+        lambda x: x.rolling(60, min_periods=20).std()
+    )
+
+    # Smooth
+    for col in ["RSI","MACD","Volatility_20"]:
+        if col in full_df.columns:
+            full_df[col + "_smoothed"] = full_df.groupby("symbol")[col].transform(
+                lambda x: x.rolling(5, min_periods=1).median()
+            )
+
+    # Lag features
+    lag_defs = {
+        "Return_1d":"Return_1d_lag1",
+        "Return_5d":"Return_5d_lag1",
+        "Momentum_20":"Momentum_20_lag1",
+        "RSI":"RSI_lag1",
+        "MACD":"MACD_lag1",
+    }
+    for src, lag in lag_defs.items():
+        if src in full_df.columns:
+            full_df[lag] = full_df.groupby("symbol")[src].shift(1)
+
+    # Ranks
+    if "RSI" in full_df.columns:
+        full_df["RSI_rank"] = full_df.groupby("date")["RSI"].rank(pct=True)
+
+    if "Momentum_60" in full_df.columns:
+        full_df["Momentum_60_rank"] = full_df.groupby("date")["Momentum_60"].rank(pct=True)
+
+    if "Volatility_20" in full_df.columns:
+        full_df["Volatility_20_rank"] = full_df.groupby("date")["Volatility_20"].rank(pct=True)
+
+    # Final feature list
+    feature_cols = [c for c in base_feature_cols + extra_features if c in full_df.columns]
+
+    full_df = full_df.dropna(subset=feature_cols).reset_index(drop=True)
+    if full_df.empty:
+        return []
+
+    # ----------------------------
+    # 4. LOAD MODEL
+    # ----------------------------
+    try:
+        model = joblib.load("xgb_fwd_return_model.joblib")
+        scaler = joblib.load("xgb_fwd_return_scaler.joblib")
+    except Exception as e:
+        print("Error loading model:", e)
+        return []
+
+    # ----------------------------
+    # 5. PREDICT RETURNS
+    # ----------------------------
+    df_pred_all = predict_returns(model, scaler, full_df, feature_cols)
+
+    # Attach volatility (for risk filtering)
+    if "Volatility_20" in full_df.columns:
+        vol_df = full_df.groupby("symbol")["Volatility_20"].last().reset_index()
+    else:
+        vol_df = full_df.groupby("symbol")["Ret_1d_raw"].std().reset_index()
+        vol_df.rename(columns={"Ret_1d_raw": "Volatility_20"}, inplace=True)
+
+    df_pred_all = df_pred_all.merge(vol_df, on="symbol", how="left")
+
+    # ----------------------------
+    # 6. RISK FILTER (LOW/MED/HIGH)
+    # ----------------------------
+    if riskTolerance.lower() == "low":
+        df_pred_all = df_pred_all[df_pred_all["Volatility_20"] < df_pred_all["Volatility_20"].quantile(0.33)]
+    elif riskTolerance.lower() == "medium":
+        df_pred_all = df_pred_all[
+            (df_pred_all["Volatility_20"] >= df_pred_all["Volatility_20"].quantile(0.33)) &
+            (df_pred_all["Volatility_20"] < df_pred_all["Volatility_20"].quantile(0.66))
+        ]
+    elif riskTolerance.lower() == "high":
+        df_pred_all = df_pred_all[df_pred_all["Volatility_20"] >= df_pred_all["Volatility_20"].quantile(0.66)]
+
+    if df_pred_all.empty:
+        return []
+
+    # ----------------------------
+    # 7. PRIORITY BOOST (ONLY IF >1 SECTORS)
+    # ----------------------------
+    if assetPreferences and len(assetPreferences) > 1:
+
+        # Map symbol → sector
+        sector_map = dict(zip(filtered_df["symbol"], filtered_df["sector"]))
+        df_pred_all["sector"] = df_pred_all["symbol"].map(sector_map)
+
+        # Build priority map
+        priority_map = {
+            sector: (len(assetPreferences) - i)
+            for i, sector in enumerate(assetPreferences)
+        }
+
+        df_pred_all["priority"] = df_pred_all["sector"].map(priority_map).fillna(0)
+
+        # Boost formula
+        df_pred_all["boost_score"] = (
+            0.7 * df_pred_all["pred_return_fwd"] +
+            0.3 * (df_pred_all["priority"] / df_pred_all["priority"].max())
+        )
+
+    else:
+        df_pred_all["priority"] = 0
+        df_pred_all["boost_score"] = df_pred_all["pred_return_fwd"]
+
+    # ----------------------------
+    # 8. SELECT TOP 3 (LATEST DATE)
+    # ----------------------------
+    latest_date = df_pred_all["date"].max()
+    df_latest = df_pred_all[df_pred_all["date"] == latest_date]
+
+    df_latest = df_latest.sort_values("boost_score", ascending=False)
+
+    top3 = df_latest.head(3).copy()
+
+    # ----------------------------
+    # 9. MONEY CALCULATIONS
+    # ----------------------------
+    top3["predicted_percent"] = (top3["pred_return_fwd"] * 100).round(2)
+    top3["final_amount"] = (initialNetAmount * (1 + top3["pred_return_fwd"])).round(2)
+    top3["profit"] = (top3["final_amount"] - initialNetAmount).round(2)
+
+    return top3[[
+        "symbol", "close", "predicted_percent",
+        "final_amount", "profit", "date"
+    ]].to_dict(orient="records")
+
+
 if __name__ == "__main__":
     example_run()
-
-
-
-
