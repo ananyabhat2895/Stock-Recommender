@@ -88,27 +88,32 @@ const InsightForm: React.FC = () => {
     }
   };
 
-  const computeTimeHorizonMonths = () => {
-    if (formData.timeHorizonUnit === "Years")
-      return formData.timeHorizonValue * 12;
+const computeTimeHorizonMonths = () => {
+  if (formData.timeHorizonUnit === "Years") {
+    return formData.timeHorizonValue * 12;
+  }
 
-    if (formData.timeHorizonUnit === "Months")
-      return formData.timeHorizonValue;
+  if (formData.timeHorizonUnit === "Months") {
+    return formData.timeHorizonValue;
+  }
 
-    if (
-      formData.timeHorizonUnit === "Specific Date" &&
-      formData.specificDate
-    ) {
-      const today = new Date();
-      const target = new Date(formData.specificDate);
-      if (target <= today) return undefined;
+  if (formData.timeHorizonUnit === "Days") {
+    return Math.max(1, Math.round(formData.timeHorizonValue / 30)); 
+  }
 
-      const diffMs = target.getTime() - today.getTime();
-      return Math.round(diffMs / (1000 * 60 * 60 * 24 * 30));
-    }
+  if (formData.timeHorizonUnit === "Specific Date" && formData.specificDate) {
+    const today = new Date();
+    const target = new Date(formData.specificDate);
 
-    return undefined;
-  };
+    if (target <= today) return undefined;
+
+    const diffMs = target.getTime() - today.getTime();
+    return Math.round(diffMs / (1000 * 60 * 60 * 24 * 30));
+  }
+
+  return undefined;
+};
+
 
   const riskMeterStyle = useMemo(() => {
     const riskMap: Record<RiskTolerance, number> = {
